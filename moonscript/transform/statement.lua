@@ -255,7 +255,12 @@ return Transformer({
       if "block_exp" == _exp_0 then
         local block_body = first_value[2]
         local idx = #block_body
-        block_body[idx] = build.assign_one(first_name, block_body[idx])
+        local last = block_body[idx]
+        local assign = build.assign_one(first_name, last)
+        if type(last) == "table" then
+          assign[-1] = last[-1]
+        end
+        block_body[idx] = assign
         return build.group({
           {
             "declare",
@@ -287,13 +292,17 @@ return Transformer({
         local ret
         ret = function(stm)
           if is_value(stm) then
-            return {
+            local assign = {
               "assign",
               names,
               {
                 stm
               }
             }
+            if type(stm) == "table" then
+              assign[-1] = stm[-1]
+            end
+            return assign
           else
             return stm
           end

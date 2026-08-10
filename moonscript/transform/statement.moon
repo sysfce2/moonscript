@@ -166,7 +166,12 @@ Transformer {
         when "block_exp"
           block_body = first_value[2]
           idx = #block_body
-          block_body[idx] = build.assign_one first_name, block_body[idx]
+          last = block_body[idx]
+          assign = build.assign_one first_name, last
+          -- position of the value being assigned, the name is from the line
+          -- of the enclosing assign
+          assign[-1] = last[-1] if type(last) == "table"
+          block_body[idx] = assign
 
           return build.group {
             {"declare", extract_declare_names {first_name}}
@@ -192,7 +197,11 @@ Transformer {
       if types.cascading[t]
         ret = (stm) ->
           if is_value stm
-            {"assign", names, {stm}}
+            assign = {"assign", names, {stm}}
+            -- position of the value being assigned, the name is from the
+            -- line of the enclosing assign
+            assign[-1] = stm[-1] if type(stm) == "table"
+            assign
           else
             stm
 

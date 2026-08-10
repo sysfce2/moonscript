@@ -89,7 +89,10 @@ compile_file_text = function(text, opts)
       tree = assert(fn(tree))
     end
   end
-  local code, posmap_or_err, err_pos = compile.tree(tree)
+  local code, posmap_or_err, err_pos = compile.tree(tree, {
+    correlate = opts.correlate,
+    source = text
+  })
   if not (code) then
     return nil, compile.format_error(posmap_or_err, err_pos, text)
   end
@@ -195,5 +198,6 @@ return {
   format_time = format_time,
   path_to_target = path_to_target,
   compile_file_text = compile_file_text,
-  compile_and_write = compile_and_write
+  compile_and_write = compile_and_write,
+  write_file = write_file
 }

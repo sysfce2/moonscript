@@ -26,6 +26,11 @@ class Transformer
         node
 
       return node if res == node
+
+      -- carry the source position through the transformation
+      if type(res) == "table" and type(node) == "table" and res[-1] == nil
+        res[-1] = node[-1]
+
       node = res
 
     node

@@ -235,6 +235,15 @@ return {
     return nil
   end,
   group = function(self, node)
+    if node[-1] then
+      local _list_0 = node[2]
+      for _index_0 = 1, #_list_0 do
+        local child = _list_0[_index_0]
+        if type(child) == "table" and child[-1] == nil and ntype(child) ~= "noop" then
+          child[-1] = node[-1]
+        end
+      end
+    end
     return self:stms(node[2])
   end,
   ["do"] = function(self, node)

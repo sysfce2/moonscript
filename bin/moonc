@@ -34,6 +34,7 @@ parser:flag("-v --version", "Print version"):action(function()
   os.exit(0)
 end)
 parser:flag("-w --watch", "Watch file/directory for updates")
+parser:flag("--correlate", "Write output where line numbers match the source line numbers")
 parser:option("--transform", "Transform syntax tree with module")
 
 parser:mutex(
@@ -46,20 +47,21 @@ parser:mutex(
 )
 
 parser:flag("-",
-  "Read from standard in, print to standard out (Must be only argument)")
+  "Read from standard in, print to standard out")
 
-local read_stdin = arg[1] == "-" -- luacheck: ignore 113
-
-if not read_stdin then
-  parser:argument("file/directory"):args("+")
-else
-  if arg[2] ~= nil then
-    io.stderr:write("- must be the only argument\n")
-    os.exit(1)
+local read_stdin = false
+for i = #arg, 1, -1 do -- luacheck: ignore 113
+  if arg[i] == "-" then
+    read_stdin = true
+    table.remove(arg, i)
   end
 end
 
-local opts = read_stdin and {} or parser:parse()
+if not read_stdin then
+  parser:argument("file/directory"):args("+")
+end
+
+local opts = parser:parse(arg)
 
 -- options passed to lint_file, stages: nil runs all of them
 local lint_opts
@@ -156,20 +158,53 @@ local function get_files(fname, files)
 end
 
 if read_stdin then
-  local parse = require "moonscript.parse"
-  local compile = require "moonscript.compile"
-
-  local text = io.stdin:read("*a")
-  local tree, err = parse.string(text)
-
-  if not tree then error(err) end
-  local code, err, pos = compile.tree(tree)
-
-  if not code then
-    error(compile.format_error(err, pos, text))
+  if opts.watch or opts.output_to then
+    io.stderr:write("stdin can't be used with --watch or --output-to\n")
+    os.exit(1)
   end
 
-  print(code)
+  local text = io.stdin:read("*a")
+
+  if opts.lint then
+    local lint = require "moonscript.cmd.lint"
+    local res, err = lint.lint_code(text, "stdin", nil, lint_opts)
+    if res then
+      io.stderr:write(res .. "\n")
+      os.exit(1)
+    elseif err then
+      io.stderr:write(err .. "\n")
+      os.exit(1)
+    end
+    os.exit()
+  end
+
+  local code, err = moonc.compile_file_text(text, {
+    fname = "stdin",
+    benchmark = opts.b,
+    show_posmap = opts.X,
+    show_parse_tree = opts.T,
+    transform_module = opts.transform,
+    correlate = opts.correlate
+  })
+
+  if not code then
+    io.stderr:write(err .. "\n")
+    os.exit(1)
+  end
+
+  -- true means an option like -T already handled the output
+  if code ~= true then
+    if opts.o then
+      local success, write_err = moonc.write_file(opts.o, code)
+      if not success then
+        io.stderr:write(write_err .. "\n")
+        os.exit(1)
+      end
+    else
+      print(code)
+    end
+  end
+
   os.exit()
 end
 
@@ -204,7 +239,11 @@ if opts.watch then
       return lint.lint_file(fname, lint_opts)
     end
   else
-    handle_file = compile_and_write
+    handle_file = function(fname, target)
+      return compile_and_write(fname, target, {
+        correlate = opts.correlate
+      })
+    end
   end
 
   local watcher = create_watcher(files)
@@ -277,7 +316,8 @@ else
       benchmark = opts.b,
       show_posmap = opts.X,
       show_parse_tree = opts.T,
-      transform_module = opts.transform
+      transform_module = opts.transform,
+      correlate = opts.correlate
     })
 
     if not success then

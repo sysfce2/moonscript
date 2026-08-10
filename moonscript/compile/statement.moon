@@ -133,6 +133,13 @@ import unpack from require "moonscript.util"
     nil
 
   group: (node) =>
+    -- pass the position to any children that don't have their own. NOOP is a
+    -- shared constant so it must not be tagged
+    if node[-1]
+      for child in *node[2]
+        if type(child) == "table" and child[-1] == nil and ntype(child) != "noop"
+          child[-1] = node[-1]
+
     @stms node[2]
 
   do: (node) =>

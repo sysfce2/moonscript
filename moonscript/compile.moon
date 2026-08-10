@@ -17,6 +17,23 @@ indent_char = "  "
 
 local Line, DelayedLine, Lines, Block, RootBlock
 
+-- returns a function that converts a byte offset in str to a line number.
+-- faster than util.pos_to_line for repeated lookups on the same string
+line_locator = (str) ->
+  line_starts = {1}
+  for start in str\gmatch "\n()"
+    line_starts[#line_starts + 1] = start
+
+  (pos) ->
+    lo, hi = 1, #line_starts
+    while lo < hi
+      mid = math.ceil (lo + hi) / 2
+      if line_starts[mid] <= pos
+        lo = mid
+      else
+        hi = mid - 1
+    lo
+
 -- a buffer for building up lines
 class Lines
   new: =>
@@ -77,6 +94,55 @@ class Lines
            l\flatten indent and indent .. indent_char or indent_char, buffer
         else
           error "Unknown item in Lines: #{l}"
+    buffer
+
+  -- like flatten, but pins each line to the line number of its marked source
+  -- position: pads with blank lines when the output is behind the source,
+  -- joins onto the current line when it's ahead. state tracks the current
+  -- output line, the last emitted chunk, and the resulting posmap
+  flatten_correlated: (line_for_pos, state, indent=nil, buffer={}) =>
+    posmap = @posmap
+
+    for i = 1, #@
+      l = @[i]
+      t = mtype l
+
+      if t == DelayedLine
+        l = l\render!
+        t = "string"
+
+      switch t
+        when "string"
+          target = posmap[i] and line_for_pos posmap[i]
+
+          -- same ambiguous statement check as flatten, between adjacent
+          -- strings of the same buffer. chunks meeting across nesting levels
+          -- never need a break: block openers can't end an expression
+          prev = @[i - 1]
+          ambiguous = l\sub(1,1) == "(" and "string" == type(prev) and
+            prev\sub(-1) != ',' and prev\sub(-3) != 'end'
+
+          if target and target > state.line
+            insert buffer, ";" if ambiguous
+            insert buffer, ("\n")\rep target - state.line
+            insert buffer, indent if indent
+            state.line = target
+          elseif state.started
+            insert buffer, ambiguous and "; " or " "
+
+          insert buffer, l
+          state.started = true
+
+          if target
+            state.posmap[state.line] or= posmap[i]
+
+          state.line += 1 for _ in l\gmatch "\n"
+        when Lines
+          l\flatten_correlated line_for_pos, state,
+            indent and indent .. indent_char or indent_char, buffer
+        else
+          error "Unknown item in Lines: #{l}"
+
     buffer
 
   __tostring: =>
@@ -419,7 +485,7 @@ class Block
     nil
 
 class RootBlock extends Block
-  new: (@options) =>
+  new: (@options={}) =>
     super!
 
   __tostring: => "RootBlock<>"
@@ -430,8 +496,17 @@ class RootBlock extends Block
     @stms stms
 
   render: =>
-    -- print @_lines
-    buffer = @_lines\flatten!
+    buffer = if @options.correlate
+      source = assert @options.source,
+        "correlate option requires the original code in the source option"
+
+      state = { line: 1, posmap: {} }
+      out = @_lines\flatten_correlated line_locator(source), state
+      @posmap = state.posmap
+      out
+    else
+      @_lines\flatten!
+
     buffer[#buffer] = nil if buffer[#buffer] == "\n"
     table.concat buffer
 
@@ -478,7 +553,7 @@ tree = (tree, options={}) ->
     return nil, error_msg, error_pos or scope.last_pos
 
   lua_code = scope\render!
-  posmap = scope._lines\flatten_posmap!
+  posmap = scope.posmap or scope._lines\flatten_posmap!
   lua_code, posmap
 
 -- mmmm

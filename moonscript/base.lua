@@ -57,6 +57,16 @@ to_lua = function(text, options)
   if not tree then
     return nil, err
   end
+  if options.correlate and not options.source then
+    do
+      local _tbl_0 = { }
+      for k, v in pairs(options) do
+        _tbl_0[k] = v
+      end
+      options = _tbl_0
+    end
+    options.source = text
+  end
   local code, ltable, pos = compile.tree(tree, options)
   if not code then
     return nil, compile.format_error(ltable, pos, text)

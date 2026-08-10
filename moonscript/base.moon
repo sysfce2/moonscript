@@ -28,6 +28,11 @@ to_lua = (text, options={}) ->
   if not tree
     return nil, err
 
+  if options.correlate and not options.source
+    -- clone so we don't clobber options
+    options = {k, v for k, v in pairs options}
+    options.source = text
+
   code, ltable, pos = compile.tree tree, options
   if not code
     return nil, compile.format_error(ltable, pos, text)

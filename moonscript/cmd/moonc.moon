@@ -89,7 +89,10 @@ compile_file_text = (text, opts={}) ->
     fn = assert file!
     tree = assert fn tree
 
-  code, posmap_or_err, err_pos = compile.tree tree
+  code, posmap_or_err, err_pos = compile.tree tree, {
+    correlate: opts.correlate
+    source: text
+  }
 
   unless code
     return nil, compile.format_error posmap_or_err, err_pos, text
@@ -194,4 +197,5 @@ path_to_target = (path, target_dir=nil, base_dir=nil) ->
 
   :compile_file_text
   :compile_and_write
+  :write_file
 }

@@ -32,6 +32,9 @@ do
         if res == node then
           return node
         end
+        if type(res) == "table" and type(node) == "table" and res[-1] == nil then
+          res[-1] = node[-1]
+        end
         node = res
       end
       return node

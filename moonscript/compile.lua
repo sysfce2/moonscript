@@ -24,6 +24,27 @@ local pos_to_line, get_closest_line, trim, unpack, mtype
 pos_to_line, get_closest_line, trim, unpack, mtype = util.pos_to_line, util.get_closest_line, util.trim, util.unpack, util.mtype
 local indent_char = "  "
 local Line, DelayedLine, Lines, Block, RootBlock
+local line_locator
+line_locator = function(str)
+  local line_starts = {
+    1
+  }
+  for start in str:gmatch("\n()") do
+    line_starts[#line_starts + 1] = start
+  end
+  return function(pos)
+    local lo, hi = 1, #line_starts
+    while lo < hi do
+      local mid = math.ceil((lo + hi) / 2)
+      if line_starts[mid] <= pos then
+        lo = mid
+      else
+        hi = mid - 1
+      end
+    end
+    return lo
+  end
+end
 do
   local _class_0
   local _base_0 = {
@@ -100,6 +121,55 @@ do
           insert(buffer, "\n")
         elseif Lines == _exp_0 then
           l:flatten(indent and indent .. indent_char or indent_char, buffer)
+        else
+          error("Unknown item in Lines: " .. tostring(l))
+        end
+      end
+      return buffer
+    end,
+    flatten_correlated = function(self, line_for_pos, state, indent, buffer)
+      if indent == nil then
+        indent = nil
+      end
+      if buffer == nil then
+        buffer = { }
+      end
+      local posmap = self.posmap
+      for i = 1, #self do
+        local l = self[i]
+        local t = mtype(l)
+        if t == DelayedLine then
+          l = l:render()
+          t = "string"
+        end
+        local _exp_0 = t
+        if "string" == _exp_0 then
+          local target = posmap[i] and line_for_pos(posmap[i])
+          local prev = self[i - 1]
+          local ambiguous = l:sub(1, 1) == "(" and "string" == type(prev) and prev:sub(-1) ~= ',' and prev:sub(-3) ~= 'end'
+          if target and target > state.line then
+            if ambiguous then
+              insert(buffer, ";")
+            end
+            insert(buffer, ("\n"):rep(target - state.line))
+            if indent then
+              insert(buffer, indent)
+            end
+            state.line = target
+          elseif state.started then
+            insert(buffer, ambiguous and "; " or " ")
+          end
+          insert(buffer, l)
+          state.started = true
+          if target then
+            local _update_0 = state.line
+            state.posmap[_update_0] = state.posmap[_update_0] or posmap[i]
+          end
+          for _ in l:gmatch("\n") do
+            state.line = state.line + 1
+          end
+        elseif Lines == _exp_0 then
+          l:flatten_correlated(line_for_pos, state, indent and indent .. indent_char or indent_char, buffer)
         else
           error("Unknown item in Lines: " .. tostring(l))
         end
@@ -629,7 +699,19 @@ do
       return self:stms(stms)
     end,
     render = function(self)
-      local buffer = self._lines:flatten()
+      local buffer
+      if self.options.correlate then
+        local source = assert(self.options.source, "correlate option requires the original code in the source option")
+        local state = {
+          line = 1,
+          posmap = { }
+        }
+        local out = self._lines:flatten_correlated(line_locator(source), state)
+        self.posmap = state.posmap
+        buffer = out
+      else
+        buffer = self._lines:flatten()
+      end
       if buffer[#buffer] == "\n" then
         buffer[#buffer] = nil
       end
@@ -640,6 +722,9 @@ do
   setmetatable(_base_0, _parent_0.__base)
   _class_0 = setmetatable({
     __init = function(self, options)
+      if options == nil then
+        options = { }
+      end
       self.options = options
       return _class_0.__parent.__init(self)
     end,
@@ -728,7 +813,7 @@ tree = function(tree, options)
     return nil, error_msg, error_pos or scope.last_pos
   end
   local lua_code = scope:render()
-  local posmap = scope._lines:flatten_posmap()
+  local posmap = scope.posmap or scope._lines:flatten_posmap()
   return lua_code, posmap
 end
 do
