@@ -74,6 +74,11 @@ lua-$(LUA_SRC_VERSION)/src/liblua.a:
 	tar -xzf lua-$(LUA_SRC_VERSION).tar.gz
 	cd lua-$(LUA_SRC_VERSION)/src && make liblua.a MYCFLAGS=-DLUA_USE_POSIX
 
+# luac must come from the same tree as liblua.a: 5.1 bytecode embeds
+# endianness and type sizes, so it has to match the linked VM
+lua-$(LUA_SRC_VERSION)/src/luac: lua-$(LUA_SRC_VERSION)/src/liblua.a
+	cd lua-$(LUA_SRC_VERSION)/src && make luac MYCFLAGS=-DLUA_USE_POSIX
+
 lpeg-$(LPEG_VERSION)/lptree.c:
 	curl -L -o lpeg.tar.gz https://www.inf.puc-rio.br/~roberto/lpeg/lpeg-$(LPEG_VERSION).tar.gz
 	tar -xzf lpeg.tar.gz
@@ -82,24 +87,31 @@ luafilesystem-$(LFS_VERSION)/src/lfs.c:
 	curl -L -o luafilesystem.tar.gz https://github.com/keplerproject/luafilesystem/archive/v$(LFS_VERSION).tar.gz
 	tar -xzf luafilesystem.tar.gz
 
-bin/binaries/moonscript.h: moonscript/*.lua moon/*.lua
+# Embedded scripts are precompiled to bytecode to skip parsing at startup.
+# Unstripped so tracebacks keep line numbers.
+bin/binaries/moonscript.h: moonscript/*.lua moon/*.lua lua-$(LUA_SRC_VERSION)/src/luac
 	bin/splat.moon -x moonscript.parse.slow -x moonscript.parse.grammar moonscript moon > moonscript.lua
-	xxd -i moonscript.lua > $@
-	rm moonscript.lua
+	lua-$(LUA_SRC_VERSION)/src/luac -o moonscript.luac moonscript.lua
+	xxd -i -n moonscript_lua moonscript.luac > $@
+	rm moonscript.lua moonscript.luac
 
-bin/binaries/moon.h: bin/moon
+bin/binaries/moon.h: bin/moon lua-$(LUA_SRC_VERSION)/src/luac
 	awk 'FNR>1' bin/moon > moon.lua
-	xxd -i moon.lua > $@
-	rm moon.lua
+	lua-$(LUA_SRC_VERSION)/src/luac -o moon.luac moon.lua
+	xxd -i -n moon_lua moon.luac > $@
+	rm moon.lua moon.luac
 
-bin/binaries/argparse.h: lua_modules
+bin/binaries/argparse.h: lua_modules lua-$(LUA_SRC_VERSION)/src/luac
 	bin/splat.moon --strip-prefix -l argparse $$(find lua_modules/share/lua -name "argparse.lua" -exec dirname {} \; | head -1) > bin/binaries/argparse.lua
-	xxd -i -n argparse_lua bin/binaries/argparse.lua > $@
+	lua-$(LUA_SRC_VERSION)/src/luac -o argparse.luac bin/binaries/argparse.lua
+	xxd -i -n argparse_lua argparse.luac > $@
+	rm argparse.luac
 
-bin/binaries/moonc.h: bin/moonc
+bin/binaries/moonc.h: bin/moonc lua-$(LUA_SRC_VERSION)/src/luac
 	awk 'FNR>1' bin/moonc > moonc.lua
-	xxd -i moonc.lua > $@
-	rm moonc.lua
+	lua-$(LUA_SRC_VERSION)/src/luac -o moonc.luac moonc.lua
+	xxd -i -n moonc_lua moonc.luac > $@
+	rm moonc.lua moonc.luac
 
 dist/moon: lua-$(LUA_SRC_VERSION)/src/liblua.a lpeg-$(LPEG_VERSION)/lptree.c bin/binaries/moonscript.h bin/binaries/moon.h bin/binaries/argparse.h bin/binaries/moon.c bin/binaries/moonscript.c
 	mkdir -p dist

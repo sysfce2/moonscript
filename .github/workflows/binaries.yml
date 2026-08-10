@@ -23,32 +23,62 @@ jobs:
         luarocks install argparse
         luarocks make
 
-    - name: Generate moonscript.h
+    - name: Generate embedded chunks
       run: |
         bin/splat.moon -x moonscript.parse.slow -x moonscript.parse.grammar moonscript moon > moonscript.lua
-        xxd -i moonscript.lua > bin/binaries/moonscript.h
-
-    - name: Generate moon.h
-      run: |
         awk 'FNR>1' bin/moon > moon.lua
-        xxd -i moon.lua > bin/binaries/moon.h
-
-    - name: Generate argparse.h
-      run: |
-        luarocks install argparse --tree=lua_modules
-        bin/splat.moon --strip-prefix -l argparse $(find lua_modules/share/lua -name "argparse.lua" -exec dirname {} \; | head -1) > bin/binaries/argparse.lua
-        xxd -i -n argparse_lua bin/binaries/argparse.lua > bin/binaries/argparse.h
-
-    - name: Generate moonc.h
-      run: |
         awk 'FNR>1' bin/moonc > moonc.lua
-        xxd -i moonc.lua > bin/binaries/moonc.h
+        luarocks install argparse --tree=lua_modules
+        bin/splat.moon --strip-prefix -l argparse $(find lua_modules/share/lua -name "argparse.lua" -exec dirname {} \; | head -1) > argparse.lua
 
-    - name: Upload headers
+    # Embedded chunks are precompiled to bytecode so the binaries skip
+    # parsing at startup. Unstripped (luac default, luajit -g) so tracebacks
+    # keep line numbers.
+    #
+    # 5.1 bytecode embeds endianness and type sizes; this x86_64 output
+    # loads on every PUC target in the matrix (all little-endian, 4-byte
+    # int, 8-byte size_t).
+    - name: Generate PUC bytecode headers
+      run: |
+        luac -v
+        mkdir -p headers-puc
+        for chunk in moonscript moon moonc argparse; do
+          luac -o $chunk.luac $chunk.lua
+          xxd -i -n ${chunk}_lua $chunk.luac > headers-puc/$chunk.h
+        done
+
+    - name: Build LuaJIT
+      run: |
+        curl -L -o luajit.tar.gz https://github.com/LuaJIT/LuaJIT/archive/$LUAJIT_COMMIT.tar.gz
+        tar -xzf luajit.tar.gz
+        mv LuaJIT-* luajit
+        make -C luajit/src -j$(nproc) amalg BUILDMODE=static
+
+    # LuaJIT bytecode is portable across architectures but tied to the
+    # bytecode version and GC64 mode: the pinned commit plus an all-GC64
+    # matrix (x64 defaults on, arm64 always on) keeps every target
+    # compatible with this generator build.
+    # LUA_PATH: -b lives in jit.bcsave, which the uninstalled binary can
+    # only find in the source tree
+    - name: Generate LuaJIT bytecode headers
+      run: |
+        mkdir -p headers-luajit
+        for chunk in moonscript moon moonc argparse; do
+          LUA_PATH="luajit/src/?.lua;;" luajit/src/luajit -bg $chunk.lua $chunk.raw
+          xxd -i -n ${chunk}_lua $chunk.raw > headers-luajit/$chunk.h
+        done
+
+    - name: Upload PUC headers
       uses: actions/upload-artifact@v6
       with:
-        name: generated-headers
-        path: bin/binaries/*.h
+        name: generated-headers-puc
+        path: headers-puc/*.h
+
+    - name: Upload LuaJIT headers
+      uses: actions/upload-artifact@v6
+      with:
+        name: generated-headers-luajit
+        path: headers-luajit/*.h
 
   linux:
     runs-on: ${{ matrix.runner }}
@@ -108,7 +138,7 @@ jobs:
     - name: Download headers
       uses: actions/download-artifact@v4
       with:
-        name: generated-headers
+        name: generated-headers-${{ matrix.runtime }}
         path: bin/binaries/
 
     - name: Show GCC
@@ -235,7 +265,7 @@ jobs:
     - name: Download headers
       uses: actions/download-artifact@v4
       with:
-        name: generated-headers
+        name: generated-headers-${{ matrix.runtime }}
         path: bin/binaries/
 
     - uses: msys2/setup-msys2@v2
