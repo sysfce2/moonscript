@@ -10,8 +10,10 @@ import ntype, value_can_be_statement from require "moonscript.types"
 statement_compilers = require "moonscript.compile.statement"
 value_compilers = require "moonscript.compile.value"
 
+parse_errors = require "moonscript.parse.errors"
+
 import concat, insert from table
-import pos_to_line, get_closest_line, trim, unpack, mtype from util
+import unpack, mtype from util
 
 indent_char = "  "
 
@@ -511,17 +513,9 @@ class RootBlock extends Block
     table.concat buffer
 
 format_error = (msg, pos, file_str) ->
-  msg = tostring msg
-  line_message = if pos
-    line = pos_to_line file_str, pos
-    line_str, line = get_closest_line file_str, line
-    line_str = line_str or ""
-    (" [%d] >>    %s")\format line, trim line_str
-
-  concat {
-    "Compile error: "..msg
-    line_message
-  }, "\n"
+  msg = "failed to compile: " .. tostring msg
+  return msg unless pos
+  parse_errors.format file_str, pos, msg
 
 value = (value) ->
   out = nil

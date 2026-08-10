@@ -15,13 +15,14 @@ do
 end
 local statement_compilers = require("moonscript.compile.statement")
 local value_compilers = require("moonscript.compile.value")
+local parse_errors = require("moonscript.parse.errors")
 local concat, insert
 do
   local _obj_0 = table
   concat, insert = _obj_0.concat, _obj_0.insert
 end
-local pos_to_line, get_closest_line, trim, unpack, mtype
-pos_to_line, get_closest_line, trim, unpack, mtype = util.pos_to_line, util.get_closest_line, util.trim, util.unpack, util.mtype
+local unpack, mtype
+unpack, mtype = util.unpack, util.mtype
 local indent_char = "  "
 local Line, DelayedLine, Lines, Block, RootBlock
 local line_locator
@@ -757,19 +758,11 @@ do
 end
 local format_error
 format_error = function(msg, pos, file_str)
-  msg = tostring(msg)
-  local line_message
-  if pos then
-    local line = pos_to_line(file_str, pos)
-    local line_str
-    line_str, line = get_closest_line(file_str, line)
-    line_str = line_str or ""
-    line_message = (" [%d] >>    %s"):format(line, trim(line_str))
+  msg = "failed to compile: " .. tostring(msg)
+  if not (pos) then
+    return msg
   end
-  return concat({
-    "Compile error: " .. msg,
-    line_message
-  }, "\n")
+  return parse_errors.format(file_str, pos, msg)
 end
 local value
 value = function(value)
