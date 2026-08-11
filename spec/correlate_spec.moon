@@ -33,9 +33,12 @@ describe "correlate compile", ->
     assert.same 4, debug.getinfo(fns[2], "S").linedefined
 
   it "reports runtime error at source line", ->
+    -- trailing nil keeps error out of tail position, where luajit's tail
+    -- call elimination would drop the frame holding the line info
     code = unindent [[
       fn = ->
         error "boom"
+        nil
 
       fn!
     ]]
