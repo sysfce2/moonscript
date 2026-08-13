@@ -77,6 +77,7 @@ super_scope = (value, t, key) ->
 
 (node, ret, parent_assign) =>
   name, parent_val, body = unpack node, 2
+  name = nil unless name -- anonymous class have `false` set for the name
   parent_val = nil if parent_val == ""
 
   parent_cls_name = NameProxy "parent"

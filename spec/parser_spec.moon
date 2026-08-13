@@ -62,11 +62,12 @@ describe "moonscript.parse", ->
         [-1]: 1}
     }, parse.string "x = [==[str]==]"
 
-  it "parses an anonymous class with a nil name slot", ->
+  it "parses an anonymous class with a false name slot", ->
     tree = assert parse.string "x = class"
     class_node = tree[1][3][1]
     assert.same "class", class_node[1]
-    assert.is_nil class_node[2]
+    -- false, not nil: a hole would make the node's length unpredictable
+    assert.is_false class_node[2]
     assert.same "", class_node[3]
     assert.same {}, class_node[4]
 

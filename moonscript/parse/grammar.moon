@@ -322,7 +322,8 @@ key = (chars) ->
 
   ClassDecl: mark("class",
     key("class") * -P(":") *
-    (V"Assignable" + Cc(nil)) *
+    -- anonymous classes have name slot set to false
+    (V"Assignable" + Cc(false)) *
     (key("extends") * V"PreventIndent" * V"Exp" * V"PopIndent" + C(P""))^-1 *
     (V"ClassBlock" + Ct(P"")))
 

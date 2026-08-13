@@ -2249,7 +2249,7 @@ do -- choice with 2 alternatives
 if not parser.success and not parser.throw_label then
   parser.success = true
   do -- constant capture (1 values)
-  cap_push(parser, CAP_NIL, nil, 0, 0)
+  cap_push(parser, CAP_CONST, false, 0, 0)
 end
 end
 end

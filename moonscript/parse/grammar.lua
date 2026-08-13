@@ -195,7 +195,7 @@ return {
   TableLitLine = V("PushIndent") * V("TableValueList") * V("PopIndent") + V("Space"),
   TableBlockInner = Ct(V("KeyValueLine") * (V("SpaceBreak") ^ 1 * V("KeyValueLine")) ^ 0),
   TableBlock = mark("table", V("SpaceBreak") ^ 1 * V("Advance") * V("TableBlockInner") * V("PopIndent")),
-  ClassDecl = mark("class", key("class") * -P(":") * (V("Assignable") + Cc(nil)) * (key("extends") * V("PreventIndent") * V("Exp") * V("PopIndent") + C(P(""))) ^ -1 * (V("ClassBlock") + Ct(P("")))),
+  ClassDecl = mark("class", key("class") * -P(":") * (V("Assignable") + Cc(false)) * (key("extends") * V("PreventIndent") * V("Exp") * V("PopIndent") + C(P(""))) ^ -1 * (V("ClassBlock") + Ct(P("")))),
   ClassBlock = V("SpaceBreak") ^ 1 * V("Advance") * Ct(V("ClassLine") * (V("SpaceBreak") ^ 1 * V("ClassLine")) ^ 0) * V("PopIndent"),
   ClassLine = V("CheckIndent") * ((mark("props", V("KeyValueList")) + mark("stm", V("Statement")) + mark("stm", V("Exp"))) * sym(",") ^ -1),
   Export = mark("export", key("export") * (Cc("class") * V("ClassDecl") + op("*") + op("^") + Ct(V("NameList")) * (sym("=") * Ct(V("ExpListLow"))) ^ -1)),

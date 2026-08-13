@@ -461,7 +461,7 @@ static const char *__cg_names[] = {
 
 static int __cg_name_refs[1];
 // Interned constants (pushed once at module load)
-static int __const_refs[53];
+static int __const_refs[54];
 
 static void __const_init(lua_State *L) {
   lua_pushlstring(L, "", 0);
@@ -570,6 +570,8 @@ static void __const_init(lua_State *L) {
   __const_refs[51] = luaL_ref(L, LUA_REGISTRYINDEX);
   lua_pushinteger(L, 1);
   __const_refs[52] = luaL_ref(L, LUA_REGISTRYINDEX);
+  lua_pushboolean(L, 0);
+  __const_refs[53] = luaL_ref(L, LUA_REGISTRYINDEX);
   for (int i = 0; __cg_names[i] != NULL; i++) {
     lua_pushstring(L, __cg_names[i]);
     __cg_name_refs[i] = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -3301,7 +3303,7 @@ static bool parse_ClassDecl(Parser *parser) {
                     parser->success = true;
                     { // Constant Capture
                       // A constant capture matches the empty string and produces all given values
-                      pgen_cap_push(parser, PGEN_CAP_NIL, 0, 0, 0);
+                      pgen_cap_push(parser, PGEN_CAP_CONST, __const_refs[53], 0, 0); // false
                     }
                   }
                 }
